@@ -1,9 +1,35 @@
 block:
+  # snapd server is proprietary
   - snapd
 
 cancel:
+  # brave browser == bad
   - brave
-  - brave-browser
-  - brave-browser-stable
-  - brave-browser-beta
-  - brave-browser-nightly
+  - ^brave-browser
+
+  # suckmore
+  - ^blind-
+  - ^dmenu
+  - ^dwm
+  - ii
+  - lchat
+  - lsw
+  - quark
+  - scroll
+  - sent
+  - sic
+  - slock
+  - slstatus
+  - smdev
+  - sprop
+  - sselp
+  - st
+  - stest
+  - surf
+  - ^svkbd-
+  - swarp
+  - tabbed
+  - utmp
+  - wmname
+  - xembed
+  - xssstate

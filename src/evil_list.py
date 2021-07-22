@@ -5,11 +5,19 @@ with open("evil_list.yaml") as f:
 
 
 def mk_statement(type, name):
-
+    if name[0] == '^':
+        name = name[1:]
+        prefix = True
+    else:
+        prefix = False
     conds = ''
     for i, c in enumerate(name):
         conds += f'name[{i}] == {repr(c)} && '
-    stmt = rf"if ({conds}name[{len(name)}] == '\0') {type} = true;"
+    if not prefix:
+        cond2 = rf"name[{len(name)}] == '\0'"
+    else:
+        cond2 = 'true'
+    stmt = f"if ({conds}{cond2}) {type} = true;"
     return stmt + '\n'
 
 
