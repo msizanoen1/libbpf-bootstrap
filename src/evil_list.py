@@ -24,11 +24,9 @@ code = r"""/**
  */
 """
 
-for cancel in data["cancel"]:
-    code += mk_statement('cancel', cancel)
-
-for block in data["block"]:
-    code += mk_statement('block', block)
+for ty, names in data.items():
+    for name in names:
+        code += mk_statement(ty, name)
 
 with open("evil_list.c.inc", "w") as f:
     f.write(code)
