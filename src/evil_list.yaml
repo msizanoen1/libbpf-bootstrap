@@ -1,0 +1,9 @@
+block:
+  - snapd
+
+cancel:
+  - brave
+  - brave-browser
+  - brave-browser-stable
+  - brave-browser-beta
+  - brave-browser-nightly

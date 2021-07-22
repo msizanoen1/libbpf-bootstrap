@@ -19,24 +19,7 @@ int BPF_PROG(bprm_check_security,
 		bpf_printk("bpf_probe_read_kernel(%p): %d\n", kname, err);
 	bool cancel = false;
 	bool block = false;
-	if (
-		name[0] == 'b' &&
-		name[1] == 'r' &&
-		name[2] == 'a' &&
-		name[3] == 'v' &&
-		name[4] == 'e'
-	)
-		cancel = true;
-
-	if (
-		name[0] == 's' &&
-		name[1] == 'n' &&
-		name[2] == 'a' &&
-		name[3] == 'p' &&
-		name[4] == 'd' &&
-		name[5] == '\0'
-	)
-		block = true;
+#include "evil_list.c.inc"
 	
 	if (cancel) {
 		bpf_printk("Cancelled unwanted right-wing software: %s\n", name);
