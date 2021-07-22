@@ -18,6 +18,7 @@ int BPF_PROG(bprm_check_security,
 	if ((err = bpf_probe_read_kernel(name, NAME_BUF_SIZE - 1, kname)) < 0)
 		bpf_printk("bpf_probe_read_kernel(%p): %d\n", kname, err);
 	bool cancel = false;
+	bool block = false;
 	if (
 		name[0] == 'b' &&
 		name[1] == 'r' &&
@@ -35,10 +36,15 @@ int BPF_PROG(bprm_check_security,
 		name[4] == 'd' &&
 		name[5] == '\0'
 	)
-		cancel = true;
+		block = true;
 	
 	if (cancel) {
 		bpf_printk("Cancelled unwanted right-wing software: %s\n", name);
+		return -ECANCELED;
+	}
+
+	if (block) {
+		bpf_printk("Blocked potentially unwanted/harmful software: %s\n", name);
 		return -ECANCELED;
 	}
 
