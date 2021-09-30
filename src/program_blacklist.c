@@ -14,9 +14,12 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include "program_blacklist.skel.h"
+#include "protected_process.skel.h"
+#include "protected_process_common.h"
 
 static struct env {
 	bool verbose;
+	bool protect_current_process;
 	long min_duration_ms;
 } env;
 
@@ -25,10 +28,11 @@ const char *argp_program_bug_address = "<bpf@vger.kernel.org>";
 const char argp_program_doc[] =
 "BPF program_blacklist demo application.\n"
 "\n"
-"USAGE: ./program_blacklist [-v]\n";
+"USAGE: ./program_blacklist [-vp]\n";
 
 static const struct argp_option opts[] = {
 	{ "verbose", 'v', NULL, 0, "Verbose debug output" },
+	{ "protect", 'p', NULL, 0, "Protect program_blacklist" },
 	{},
 };
 
@@ -37,6 +41,9 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 	switch (key) {
 	case 'v':
 		env.verbose = true;
+		break;
+	case 'p':
+		env.protect_current_process = true;
 		break;
 	case ARGP_KEY_ARG:
 		argp_usage(state);
@@ -83,6 +90,7 @@ static void sig_handler(int sig)
 int main(int argc, char **argv)
 {
 	struct program_blacklist_bpf *skel;
+	struct protected_process_bpf *pp = NULL;
 	int err;
 
 	/* Parse command line arguments */
@@ -121,10 +129,22 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
+	if (env.protect_current_process)
+	{
+		pp = protect_current_process();
+		if (!pp)
+		{
+			fprintf(stderr, "Failed to protect current process");
+			goto cleanup;
+		}
+	}
+
 	pause();
 cleanup:
 	/* Clean up */
 	program_blacklist_bpf__destroy(skel);
+	if (pp)
+		protected_process_bpf__destroy(pp);
 
 	return err < 0 ? -err : 0;
 }

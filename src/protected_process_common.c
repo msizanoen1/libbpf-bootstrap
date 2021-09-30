@@ -130,3 +130,42 @@ int protected_process_setup(struct protected_process_bpf *skel)
 
     return 0;
 }
+
+struct protected_process_bpf *protect_current_process()
+{
+    int err;
+    struct protected_process_bpf *skel;
+
+    skel = protected_process_bpf__open();
+    if (!skel) {
+        fprintf(stderr, "Failed to open and load BPF skeleton\n");
+        return NULL;
+    }
+
+    protected_process_rodata(skel);
+
+    /* Load & verify BPF programs */
+    err = protected_process_bpf__load(skel);
+    if (err) {
+        fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+        goto cleanup;
+    }
+
+    err = protected_process_setup(skel);
+    if (err)
+    {
+        goto cleanup;
+    }
+
+    /* Attach tracepoints */
+    err = protected_process_bpf__attach(skel);
+    if (err) {
+        fprintf(stderr, "Failed to attach BPF skeleton\n");
+        goto cleanup;
+    }
+
+    return skel;
+cleanup:
+    protected_process_bpf__destroy(skel);
+    return NULL;
+}
