@@ -50,7 +50,7 @@ bpf_programs_d = {}
 
 foreach prog, deps : bpf_programs
   prog_c = 'src/bpf' / prog + '.c'
-  prog_o = prog + '.bpf_o'
+  prog_o = ('src/bpf' / prog + '.bpf_o').replace('/', '_')
   prog_h = prog + '.skel.h'
   target = custom_target(prog_o,
     output : prog_o,
