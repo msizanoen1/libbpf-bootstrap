@@ -121,7 +121,7 @@ int protected_process_setup(struct protected_process_bpf *skel)
         fprintf(stderr, "Failed to lock down protected processes list\n");
         return err;
     }
-    
+
     err = bpf_map_freeze(bpf_map__fd(skel->maps.cgroup_deny_once));
     if (err) {
         fprintf(stderr, "Failed to lock down cgroup deny once list\n");
