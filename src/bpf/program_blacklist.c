@@ -28,7 +28,7 @@ int BPF_PROG(bprm_check_security,
 
 	if (block) {
 		bpf_printk("Blocked potentially unwanted/harmful software: %s\n", name);
-		return -ENOEXEC;
+		return -EPERM;
 	}
 
 	return 0;

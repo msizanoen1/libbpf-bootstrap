@@ -1,0 +1,2 @@
+option('bpf-arch', type : 'string', description: 'BPF architecture')
+option('bpf-cc', type : 'string', value : 'clang', description : 'BPF compiler to use')
