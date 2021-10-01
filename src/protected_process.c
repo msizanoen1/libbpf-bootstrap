@@ -105,36 +105,12 @@ int main(int argc, char **argv)
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	/* Load and verify BPF application */
-	skel = protected_process_bpf__open();
-	if (!skel) {
-		fprintf(stderr, "Failed to open and load BPF skeleton\n");
+	skel = protect_current_process();
+	if (!skel)
 		return 1;
-	}
-
-	protected_process_rodata(skel);
-
-	/* Load & verify BPF programs */
-	err = protected_process_bpf__load(skel);
-	if (err) {
-		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
-		goto cleanup;
-	}
-
-	err = protected_process_setup(skel);
-	if (err) {
-		goto cleanup;
-	}
-
-	/* Attach tracepoints */
-	err = protected_process_bpf__attach(skel);
-	if (err) {
-		fprintf(stderr, "Failed to attach BPF skeleton\n");
-		goto cleanup;
-	}
 
 	system("/bin/bash");
-cleanup:
+
 	/* Clean up */
 	protected_process_bpf__destroy(skel);
 
