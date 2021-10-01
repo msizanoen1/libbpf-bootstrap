@@ -21,11 +21,13 @@ pp_common = static_library('protected_process_common',
 executable('protected_process',
   'protected_process.c',
   link_with : pp_common,
+  install : true,
   dependencies : [protected_process, libbpf])
 
 executable('program_blacklist',
   'program_blacklist.c',
   link_with : pp_common,
+  install : true,
   dependencies : [
     protected_process,
     program_blacklist,
