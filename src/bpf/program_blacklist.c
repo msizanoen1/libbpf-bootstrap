@@ -23,9 +23,8 @@ int BPF_PROG(bprm_check_security, struct linux_binprm *bprm)
 	struct event ev = {};
 	const unsigned char *kname =
 		BPF_CORE_READ(bprm, file, f_path.dentry, d_name.name);
-	int err;
-	if ((err = bpf_probe_read_kernel_str(name, NAME_BUF_SIZE - 1, kname)) <
-	    0)
+	int err = bpf_probe_read_kernel_str(name, NAME_BUF_SIZE - 1, kname);
+	if (err < 0)
 		bpf_printk("bpf_probe_read_kernel(%p): %d\n", kname, err);
 	bool cancel = false;
 	bool block = false;
