@@ -7,7 +7,7 @@ bpf_programs_d = {}
 
 foreach prog, pdeps : bpf_programs
   prog_c = prog + '.c'
-  prog_o = prog + '.bpf_o'
+  prog_o = prog + '.o'
   prog_h = prog + '.skel.h'
   flags = []
   deps = []
