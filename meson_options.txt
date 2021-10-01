@@ -1,3 +1,4 @@
 option('bpf-arch', type : 'string', description: 'BPF architecture')
 option('bpf-cc', type : 'string', value : 'clang', description : 'BPF compiler to use')
+option('bpf-strip', type : 'string', value : 'llvm-strip', description : 'BPF strip utility to use')
 option('libbpf-static', type : 'boolean', value : false, description : 'Link libbpf statically')

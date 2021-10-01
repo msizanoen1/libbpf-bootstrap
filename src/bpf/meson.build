@@ -8,6 +8,7 @@ bpf_programs_d = {}
 foreach prog, pdeps : bpf_programs
   prog_c = prog + '.c'
   prog_o = prog + '.o'
+  prog_o_debug = prog_o + '_debug'
   prog_h = prog + '.skel.h'
   flags = []
   deps = []
@@ -15,12 +16,17 @@ foreach prog, pdeps : bpf_programs
     flags += ['-I', dep.get('include')]
     deps += [dep.get('dep')]
   endforeach
-  target = custom_target(prog_o,
-    output : prog_o,
+  target_debug = custom_target(prog_o_debug,
+    output : prog_o_debug,
     input : prog_c,
     depends : deps,
     depfile : '@OUTPUT@.d',
     command : bpfcc_cmd + flags)
+  target = custom_target(prog_o,
+    output : prog_o,
+    input : target_debug,
+    depends : target_debug,
+    command : [bpfstrip, '-g', '-o', '@OUTPUT@', '@INPUT@'])
   header = custom_target(prog_h,
     output : prog_h,
     input : target,

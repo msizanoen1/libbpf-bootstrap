@@ -7,6 +7,7 @@ endif
 libbpf = dependency('libbpf', static : get_option('libbpf-static'))
 
 bpfcc = find_program(get_option('bpf-cc'), native : true, required : true)
+bpfstrip = find_program(get_option('bpf-strip'), native : true, required : true)
 bpftool = find_program('bpftool', native : true, required : true)
 python3 = import('python').find_installation('python3')
 
