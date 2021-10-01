@@ -4,7 +4,7 @@ if get_option('bpf-arch') == ''
   error('bpf-arch option is required')
 endif
 
-libbpf = dependency('libbpf')
+libbpf = dependency('libbpf', static : get_option('libbpf-static'))
 
 bpfcc = find_program(get_option('bpf-cc'), native : true, required : true)
 bpftool = find_program('bpftool', native : true, required : true)
