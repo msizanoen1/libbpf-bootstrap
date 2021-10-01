@@ -23,10 +23,9 @@ static struct env {
 
 const char *argp_program_version = "protected_process 0.0";
 const char *argp_program_bug_address = "<bpf@vger.kernel.org>";
-const char argp_program_doc[] =
-"BPF protected_process demo application.\n"
-"\n"
-"USAGE: ./protected_process [-v]\n";
+const char argp_program_doc[] = "BPF protected_process demo application.\n"
+				"\n"
+				"USAGE: ./protected_process [-v]\n";
 
 static const struct argp_option opts[] = {
 	{ "verbose", 'v', NULL, 0, "Verbose debug output" },
@@ -54,7 +53,8 @@ static const struct argp argp = {
 	.doc = argp_program_doc,
 };
 
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
+static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
+			   va_list args)
 {
 	if (level == LIBBPF_DEBUG && !env.verbose)
 		return 0;
@@ -64,8 +64,8 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 static void bump_memlock_rlimit(void)
 {
 	struct rlimit rlim_new = {
-		.rlim_cur	= RLIM_INFINITY,
-		.rlim_max	= RLIM_INFINITY,
+		.rlim_cur = RLIM_INFINITY,
+		.rlim_max = RLIM_INFINITY,
 	};
 
 	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
@@ -122,17 +122,16 @@ int main(int argc, char **argv)
 	}
 
 	err = protected_process_setup(skel);
-	if (err)
-	{
+	if (err) {
 		goto cleanup;
 	}
 
-    /* Attach tracepoints */
-    err = protected_process_bpf__attach(skel);
-    if (err) {
-        fprintf(stderr, "Failed to attach BPF skeleton\n");
-        goto cleanup;
-    }
+	/* Attach tracepoints */
+	err = protected_process_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
 
 	system("/bin/bash");
 cleanup:

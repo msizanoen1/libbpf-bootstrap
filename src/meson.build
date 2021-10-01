@@ -10,6 +10,8 @@ evil_list = {
   'include': meson.current_build_dir(),
 }
 
+bpfcc_cmd += ['-I', meson.current_source_dir()]
+
 subdir('bpf')
 
 pp_common = static_library('protected_process_common',

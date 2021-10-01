@@ -16,6 +16,7 @@
 #include "program_blacklist.skel.h"
 #include "protected_process.skel.h"
 #include "protected_process_common.h"
+#include "program_blacklist_events.h"
 
 static struct env {
 	bool verbose;
@@ -25,10 +26,9 @@ static struct env {
 
 const char *argp_program_version = "program_blacklist 0.0";
 const char *argp_program_bug_address = "<bpf@vger.kernel.org>";
-const char argp_program_doc[] =
-"BPF program_blacklist demo application.\n"
-"\n"
-"USAGE: ./program_blacklist [-vp]\n";
+const char argp_program_doc[] = "BPF program_blacklist demo application.\n"
+				"\n"
+				"USAGE: ./program_blacklist [-vp]\n";
 
 static const struct argp_option opts[] = {
 	{ "verbose", 'v', NULL, 0, "Verbose debug output" },
@@ -60,7 +60,8 @@ static const struct argp argp = {
 	.doc = argp_program_doc,
 };
 
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
+static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
+			   va_list args)
 {
 	if (level == LIBBPF_DEBUG && !env.verbose)
 		return 0;
@@ -70,8 +71,8 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 static void bump_memlock_rlimit(void)
 {
 	struct rlimit rlim_new = {
-		.rlim_cur	= RLIM_INFINITY,
-		.rlim_max	= RLIM_INFINITY,
+		.rlim_cur = RLIM_INFINITY,
+		.rlim_max = RLIM_INFINITY,
 	};
 
 	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
@@ -85,6 +86,14 @@ static volatile bool exiting = false;
 static void sig_handler(int sig)
 {
 	exiting = true;
+}
+
+int handle_event(void *ctx, void *data, size_t data_sz)
+{
+	const struct event *ev = data;
+	printf("Process %d (%.16s) is attempting to execute unauthorized program: %.16s\n",
+	       ev->pid, ev->comm, ev->exec);
+	return 0;
 }
 
 int main(int argc, char **argv)
@@ -128,6 +137,13 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
+	struct ring_buffer *rb = ring_buffer__new(
+		bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
+	if (!rb) {
+		fprintf(stderr, "Failed to create ring buffer\n");
+		goto cleanup;
+	}
+
 	/* Attach tracepoints */
 	err = program_blacklist_bpf__attach(skel);
 	if (err) {
@@ -136,17 +152,25 @@ int main(int argc, char **argv)
 	}
 
 	/* Protect blacklisting */
-	if (env.protect_current_process)
-	{
+	if (env.protect_current_process) {
 		pp = protect_current_process();
-		if (!pp)
-		{
+		if (!pp) {
 			fprintf(stderr, "Failed to protect current process");
 			goto cleanup;
 		}
 	}
 
-	pause();
+	while (!exiting) {
+		err = ring_buffer__poll(rb, -1);
+		if (err == -EINTR) {
+			err = 0;
+			break;
+		}
+		if (err < 0) {
+			fprintf(stderr, "Error polling ring buffer: %d\n", err);
+			goto cleanup;
+		}
+	}
 cleanup:
 	/* Clean up */
 	program_blacklist_bpf__destroy(skel);
