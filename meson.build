@@ -26,6 +26,7 @@ bpfcc_cmd = [
   '-target', 'bpf',
   '-c', '-o', '@OUTPUT@', '@INPUT@',
   '-g', '-O3',
+  '-gno-inline-line-tables',
   '-D__TARGET_ARCH_' + get_option('bpf-arch'),
   '-I', meson.current_source_dir() / 'vmlinux',
   '-I', libbpf.get_variable(pkgconfig : 'includedir'),
