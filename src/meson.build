@@ -13,16 +13,16 @@ evil_list = {
 subdir('bpf')
 
 pp_common = static_library('protected_process_common',
-  ['protected_process_common.c'],
+  'protected_process_common.c',
   dependencies : [protected_process, libbpf])
 
 executable('protected_process',
-  ['protected_process.c'],
+  'protected_process.c',
   link_with : pp_common,
   dependencies : [protected_process, libbpf])
 
 executable('program_blacklist',
-  ['program_blacklist.c'],
+  'program_blacklist.c',
   link_with : pp_common,
   dependencies : [
     protected_process,

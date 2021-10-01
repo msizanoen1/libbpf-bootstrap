@@ -98,6 +98,12 @@ int main(int argc, char **argv)
 	if (err)
 		return err;
 
+	if (env.protect_current_process) {
+		err = protected_process_init();
+		if (err)
+			return err;
+	}
+
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
 
@@ -129,6 +135,7 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
+	/* Protect blacklisting */
 	if (env.protect_current_process)
 	{
 		pp = protect_current_process();

@@ -58,6 +58,13 @@ struct {
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 4 * 1024 * 1024);
+	__type(key, u32);
+	__type(value, u8);
+} protected_maps SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 4 * 1024 * 1024);
 	__type(key, pid_t);
 	__type(value, u8);
 } cgroup_deny_once SEC(".maps");
@@ -67,6 +74,18 @@ const volatile int cgroup2_protect_inode;
 const volatile int cgroup2_freeze_inode;
 
 const __u8 map_placeholder = 0xff;
+
+SEC("lsm/bpf_map")
+int BPF_PROG(bpf_map,
+		struct bpf_map *map, fmode_t fmode) {
+	u32 map_id = BPF_CORE_READ(map, id);
+	pid_t src_pid = bpf_get_current_pid_tgid() >> 32;
+	if (fmode & FMODE_WRITE)
+		if (bpf_map_lookup_elem(&protected_maps, &map_id))
+			if (!bpf_map_lookup_elem(&protected_processes, &src_pid))
+				return -EPERM;
+	return 0;
+}
 
 SEC("lsm/task_kill")
 int BPF_PROG(task_kill,
@@ -111,26 +130,6 @@ int BPF_PROG(inode_permission,
 }
 
 #define NAME_BUF_SIZE 128
-
-SEC("lsm/bprm_check_security")
-int BPF_PROG(bprm_check_security,
-		struct linux_binprm *bprm) {
-	char namehead[NAME_BUF_SIZE] = { 0 };
-	const unsigned char *cname = BPF_CORE_READ(bprm, file, f_path.dentry, d_name.name);
-	int err;
-	if ((err = bpf_probe_read_kernel(namehead, NAME_BUF_SIZE - 1, cname)) < 0)
-		bpf_printk("bpf_probe_read_kernel(%p): %d\n", cname, err);
-	if (
-		namehead[0] == 'b' &&
-		namehead[1] == 'r' &&
-		namehead[2] == 'a' &&
-		namehead[3] == 'v' &&
-		namehead[4] == 'e'
-	)
-		return -ECANCELED;
-
-	return 0;
-}
 
 SEC("fexit/kernel_clone")
 int BPF_PROG(kernel_clone, struct kernel_clone_args *args, pid_t dpid) {

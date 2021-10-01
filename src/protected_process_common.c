@@ -107,26 +107,39 @@ void protected_process_rodata(struct protected_process_bpf *skel)
 
 int protected_process_setup(struct protected_process_bpf *skel)
 {
+    struct bpf_map_info info = {};
+    uint32_t len = (uint32_t)sizeof(info);
     int err;
     const static __u8 map_placeholder = 0xff;
     pid_t pid = getpid();
+
     err = bpf_map_update_elem(bpf_map__fd(skel->maps.protected_processes), &pid, &map_placeholder, BPF_ANY);
-    if (err) {
-        fprintf(stderr, "Failed to register protected process\n");
+    if (err)
         return err;
-    }
 
-    err = bpf_map_freeze(bpf_map__fd(skel->maps.protected_processes));
-    if (err) {
-        fprintf(stderr, "Failed to lock down protected processes list\n");
+    err = bpf_obj_get_info_by_fd(bpf_map__fd(skel->maps.protected_maps), &info, &len);
+    if (err)
         return err;
-    }
 
-    err = bpf_map_freeze(bpf_map__fd(skel->maps.cgroup_deny_once));
-    if (err) {
-        fprintf(stderr, "Failed to lock down cgroup deny once list\n");
+    err = bpf_map_update_elem(bpf_map__fd(skel->maps.protected_maps), &info.id, &map_placeholder, BPF_ANY);
+    if (err)
         return err;
-    }
+
+    err = bpf_obj_get_info_by_fd(bpf_map__fd(skel->maps.protected_processes), &info, &len);
+    if (err)
+        return err;
+
+    err = bpf_map_update_elem(bpf_map__fd(skel->maps.protected_maps), &info.id, &map_placeholder, BPF_ANY);
+    if (err)
+        return err;
+
+    err = bpf_obj_get_info_by_fd(bpf_map__fd(skel->maps.cgroup_deny_once), &info, &len);
+    if (err)
+        return err;
+
+    err = bpf_map_update_elem(bpf_map__fd(skel->maps.protected_maps), &info.id, &map_placeholder, BPF_ANY);
+    if (err)
+        return err;
 
     return 0;
 }
@@ -163,6 +176,8 @@ struct protected_process_bpf *protect_current_process()
         fprintf(stderr, "Failed to attach BPF skeleton\n");
         goto cleanup;
     }
+
+    fprintf(stderr, "protected_process: Process is protected\n");
 
     return skel;
 cleanup:

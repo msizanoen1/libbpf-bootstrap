@@ -91,6 +91,10 @@ int main(int argc, char **argv)
 	if (err)
 		return err;
 
+	err = protected_process_init();
+	if (err)
+		return err;
+
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
 
