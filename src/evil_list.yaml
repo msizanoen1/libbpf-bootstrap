@@ -2,6 +2,11 @@ block:
   # snapd server is proprietary
   - snapd
 
+  # software that compromises system integrity
+  - sysmon
+  - procmon
+  - procdump
+
 cancel:
   # brave browser == bad
   - brave
