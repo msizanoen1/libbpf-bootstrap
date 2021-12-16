@@ -23,6 +23,7 @@ bpfcc_system_inc_flags = bpfcc_system_inc_cmd.stdout().split()
 
 bpfcc_cmd = [
   bpfcc,
+  '-Wall', '-Wextra', '-Wno-unused-parameter',
   '-target', 'bpf',
   '-c', '-o', '@OUTPUT@', '@INPUT@',
   '-g', '-O3',

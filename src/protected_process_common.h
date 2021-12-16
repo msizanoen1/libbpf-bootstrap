@@ -9,5 +9,6 @@ int protected_process_init();
 void protected_process_rodata(struct protected_process_bpf *);
 int protected_process_setup(struct protected_process_bpf *);
 struct protected_process_bpf *protect_current_process();
+int pp_handle_event(void *, void *, size_t);
 
 #endif

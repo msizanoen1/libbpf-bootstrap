@@ -32,7 +32,8 @@ const char argp_program_doc[] = "BPF program_blacklist demo application.\n"
 
 static const struct argp_option opts[] = {
 	{ "verbose", 'v', NULL, 0, "Verbose debug output" },
-	{ "protect", 'p', NULL, 0, "Protect program_blacklist" },
+	{ "protect", 'p', NULL, 0,
+	  "Launch program_blacklist as protected process" },
 	{},
 };
 
@@ -91,7 +92,7 @@ static void sig_handler(int sig)
 int handle_event(void *ctx, void *data, size_t data_sz)
 {
 	const struct event *ev = data;
-	printf("Process %d (%.16s) is attempting to execute unauthorized program: %.16s\n",
+	printf("program_blacklist: process %d (%.16s) is attempting to execute unauthorized program: %.16s\n",
 	       ev->pid, ev->comm, ev->exec);
 	return 0;
 }
@@ -155,7 +156,14 @@ int main(int argc, char **argv)
 	if (env.protect_current_process) {
 		pp = protect_current_process();
 		if (!pp) {
-			fprintf(stderr, "Failed to protect current process");
+			fprintf(stderr, "Failed to protect current process\n");
+			goto cleanup;
+		}
+		err = ring_buffer__add(rb, bpf_map__fd(pp->maps.events),
+				       pp_handle_event, NULL);
+		if (err) {
+			fprintf(stderr,
+				"Failed to register protected process event callback\n");
 			goto cleanup;
 		}
 	}

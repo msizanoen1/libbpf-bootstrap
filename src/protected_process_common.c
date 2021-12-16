@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include "protected_process.skel.h"
 #include "protected_process_common.h"
+#include "protected_process_events.h"
 
 static uintptr_t cgroup2_fs_type = 0;
 
@@ -35,8 +36,9 @@ static int lookup_kallsyms(void)
 	return 0;
 }
 
-static int cgroup2_protect_inode = 0;
-static int cgroup2_freeze_inode = 0;
+static int cgroup2_protect_inode = -1;
+static int cgroup2_freeze_inode = -1;
+static int cgroup2_kill_inode = -1;
 
 static int cgroup2_find(void)
 {
@@ -72,10 +74,13 @@ static int cgroup2_find(void)
 			if (err)
 				return err;
 			cgroup2_freeze_inode = (int)st.st_ino;
+			err = fstatat(fd, "cgroup.kill", &st, 0);
+			if (!err)
+				cgroup2_kill_inode = (int)st.st_ino;
 			fprintf(stderr,
-				"cgroup2 located (path = %s, ino = %d, freeze_ino = %d)\n",
+				"protected_process: cgroup2 located (path = %s, ino = %d, freeze_ino = %d, kill_ino = %d)\n",
 				path + 3, cgroup2_protect_inode,
-				cgroup2_freeze_inode);
+				cgroup2_freeze_inode, cgroup2_kill_inode);
 			return 0;
 		}
 		free(path);
@@ -111,6 +116,7 @@ void protected_process_rodata(struct protected_process_bpf *skel)
 		(struct file_system_type *)cgroup2_fs_type;
 	skel->rodata->cgroup2_protect_inode = cgroup2_protect_inode;
 	skel->rodata->cgroup2_freeze_inode = cgroup2_freeze_inode;
+	skel->rodata->cgroup2_kill_inode = cgroup2_kill_inode;
 }
 
 int protected_process_setup(struct protected_process_bpf *skel)
@@ -197,4 +203,39 @@ struct protected_process_bpf *protect_current_process()
 cleanup:
 	protected_process_bpf__destroy(skel);
 	return NULL;
+}
+
+int pp_handle_event(void *ctx, void *data, size_t data_sz)
+{
+	const struct event *ev = data;
+	printf("protected_process: process %d (%.16s) (uid = %d) attempted to ",
+	       (int)ev->pid, ev->comm, (int)ev->uid);
+	switch (ev->type) {
+	case KERNEL_LOCKDOWN:
+		printf("compromise system integrity (lockdown_reason = %d)\n",
+		       ev->lockdown_reason);
+		break;
+	case CGROUP_FREEZE:
+		printf("freeze cgroup containing protected process\n");
+		break;
+	case CGROUP_KILL:
+		printf("kill cgroup containing protected process\n");
+		break;
+	case CGROUP_MIGRATE:
+		printf("migrate protected process to another cgroup\n");
+		break;
+	case PTRACE_ATTEMPT:
+		printf("access protected process (ptrace_mode = %d)\n",
+		       ev->ptrace_mode);
+		break;
+	case TASK_KILL:
+		printf("kill protected process\n");
+		break;
+	case BPF_MAP_TAMPER:
+		printf("tamper protected BPF maps\n");
+		break;
+	default:
+		printf("perform unknown unauthorized action\n");
+	};
+	return 0;
 }

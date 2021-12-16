@@ -5,6 +5,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
+#include "protected_process_events.h"
 
 #define SIGKILL 9
 #define SIGSTOP 19
@@ -44,9 +45,12 @@
 /* 64bit hashes as llseek() offset (for directories) */
 #define FMODE_64BITHASH ((fmode_t)0x400)
 
-#define CLONE_THREAD 0x00010000 /* Same thread group? */
-
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024 /* 256 KB */);
+} events SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -72,19 +76,79 @@ struct {
 const struct file_system_type *const volatile cgroup2_fs_type_ptr;
 const volatile int cgroup2_protect_inode;
 const volatile int cgroup2_freeze_inode;
+const volatile int cgroup2_kill_inode;
 
-const __u8 map_placeholder = 0xff;
+static const __u8 map_placeholder = 0xff;
+
+__attribute__((always_inline)) static inline pid_t getpid()
+{
+	return bpf_get_current_pid_tgid() >> 32;
+}
+
+__attribute__((always_inline)) static inline pid_t gettid()
+{
+	return bpf_get_current_pid_tgid() & 0xffffffff;
+}
+
+__attribute__((always_inline)) static inline void log_ev(struct event *ev)
+{
+	ev->pid = getpid();
+	ev->uid = bpf_get_current_uid_gid() & 0xffffffff;
+	bpf_get_current_comm(ev->comm, sizeof(ev->comm));
+	bpf_ringbuf_output(&events, ev, sizeof(*ev), 0);
+}
+
+__attribute__((always_inline)) static inline bool is_protected(pid_t tid)
+{
+	return !!bpf_map_lookup_elem(&protected_processes, &tid);
+}
+
+__attribute__((always_inline)) static inline bool is_current_protected()
+{
+	return is_protected(gettid());
+}
+
+__attribute__((always_inline)) static inline void protect(pid_t tid)
+{
+	bpf_map_update_elem(&protected_processes, &tid, &map_placeholder,
+			    BPF_ANY);
+}
+
+__attribute__((always_inline)) static inline void unprotect(pid_t tid)
+{
+	bpf_map_delete_elem(&protected_processes, &tid);
+}
+
+__attribute__((always_inline)) static inline void unprotect_current()
+{
+	unprotect(gettid());
+}
+
+SEC("lsm/locked_down")
+int BPF_PROG(locked_down, enum lockdown_reason what)
+{
+	if (!is_current_protected()) {
+		struct event ev = {
+			.type = KERNEL_LOCKDOWN,
+			.lockdown_reason = (int)what,
+		};
+		log_ev(&ev);
+		return -EPERM;
+	}
+	return 0;
+}
 
 SEC("lsm/bpf_map")
 int BPF_PROG(bpf_map, struct bpf_map *map, fmode_t fmode)
 {
 	u32 map_id = BPF_CORE_READ(map, id);
-	pid_t src_pid = bpf_get_current_pid_tgid() >> 32;
-	if (fmode & FMODE_WRITE)
-		if (bpf_map_lookup_elem(&protected_maps, &map_id))
-			if (!bpf_map_lookup_elem(&protected_processes,
-						 &src_pid))
-				return -EPERM;
+	if ((fmode & FMODE_WRITE) &&
+	    bpf_map_lookup_elem(&protected_maps, &map_id) &&
+	    !is_current_protected()) {
+		struct event ev = { .type = BPF_MAP_TAMPER };
+		log_ev(&ev);
+		return -EPERM;
+	}
 	return 0;
 }
 
@@ -93,10 +157,11 @@ int BPF_PROG(task_kill, struct task_struct *p, struct kernel_siginfo *info,
 	     int sig, const struct cred *cred)
 {
 	pid_t target_pid = BPF_CORE_READ(p, tgid);
-	pid_t src_pid = bpf_get_current_pid_tgid() >> 32;
-	if (bpf_map_lookup_elem(&protected_processes, &target_pid))
-		if (!bpf_map_lookup_elem(&protected_processes, &src_pid))
-			return -EPERM;
+	if (is_protected(target_pid) && !is_current_protected()) {
+		struct event ev = { .type = TASK_KILL };
+		log_ev(&ev);
+		return -EPERM;
+	}
 	return 0;
 }
 
@@ -104,10 +169,14 @@ SEC("lsm/ptrace_access_check")
 int BPF_PROG(ptrace_access_check, struct task_struct *child, int mode)
 {
 	pid_t target_pid = BPF_CORE_READ(child, tgid);
-	pid_t src_pid = bpf_get_current_pid_tgid() >> 32;
-	if (bpf_map_lookup_elem(&protected_processes, &target_pid))
-		if (!bpf_map_lookup_elem(&protected_processes, &src_pid))
-			return -EPERM;
+	if (is_protected(target_pid) && !is_current_protected()) {
+		struct event ev = {
+			.type = PTRACE_ATTEMPT,
+			.ptrace_mode = mode,
+		};
+		log_ev(&ev);
+		return -EPERM;
+	}
 	return 0;
 }
 
@@ -115,9 +184,18 @@ SEC("lsm/inode_permission")
 int BPF_PROG(inode_permission, struct inode *inode, int mask)
 {
 	if (BPF_CORE_READ(inode, i_sb, s_type) == cgroup2_fs_type_ptr) {
-		if (BPF_CORE_READ(inode, i_ino) == cgroup2_freeze_inode)
+		int ino = BPF_CORE_READ(inode, i_ino);
+		if (ino == cgroup2_freeze_inode) {
+			struct event ev = { .type = CGROUP_FREEZE };
+			log_ev(&ev);
 			return -EPERM;
-		pid_t pid = bpf_get_current_pid_tgid() & 0xffffffff;
+		}
+		if (ino == cgroup2_kill_inode) {
+			struct event ev = { .type = CGROUP_KILL };
+			log_ev(&ev);
+			return -EPERM;
+		}
+		pid_t pid = gettid();
 		if (bpf_map_lookup_elem(&cgroup_deny_once, &pid)) {
 			bpf_map_delete_elem(&cgroup_deny_once, &pid);
 			return -EPERM;
@@ -131,21 +209,15 @@ int BPF_PROG(inode_permission, struct inode *inode, int mask)
 SEC("fexit/kernel_clone")
 int BPF_PROG(kernel_clone, struct kernel_clone_args *args, pid_t dpid)
 {
-	pid_t src_pid = bpf_get_current_pid_tgid() >> 32;
-	if (BPF_CORE_READ(args, flags) & CLONE_THREAD)
-		return 0;
-	if (bpf_map_lookup_elem(&protected_processes, &src_pid)) {
-		bpf_map_update_elem(&protected_processes, &dpid,
-				    &map_placeholder, BPF_ANY);
-	}
+	if (is_current_protected())
+		protect(dpid);
 	return 0;
 }
 
 SEC("fentry/do_exit")
 int BPF_PROG(do_exit, long code)
 {
-	pid_t pid = bpf_get_current_pid_tgid() & 0xffffffff;
-	bpf_map_delete_elem(&protected_processes, &pid);
+	unprotect_current();
 	return 0;
 }
 
@@ -153,10 +225,12 @@ SEC("fentry/cgroup_attach_permissions")
 int BPF_PROG(cgroup_attach_permissions, struct cgroup *src_cgrp,
 	     struct cgroup *dst_cgrp, struct super_block *sb, bool threadgroup)
 {
-	if (BPF_CORE_READ(src_cgrp, kn, id) == cgroup2_protect_inode) {
-		pid_t pid = bpf_get_current_pid_tgid() & 0xffffffff;
+	if ((int)BPF_CORE_READ(src_cgrp, kn, id) == cgroup2_protect_inode) {
+		pid_t pid = gettid();
 		bpf_map_update_elem(&cgroup_deny_once, &pid, &map_placeholder,
 				    BPF_ANY);
+		struct event ev = { .type = CGROUP_MIGRATE };
+		log_ev(&ev);
 	}
 	return 0;
 }
