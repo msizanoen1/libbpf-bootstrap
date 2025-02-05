@@ -1,0 +1,9 @@
+[Unit]
+Description=Block libdecor GTK plugin
+
+[Service]
+Type=exec
+ExecStart=%Y/../../../libexec/libdecor_lsm
+
+[Install]
+WantedBy=graphical.target
