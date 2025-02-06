@@ -1,5 +1,6 @@
 [Unit]
 Description=Block libdecor GTK plugin
+Before=systemd-user-sessions.service
 
 [Service]
 Type=notify
