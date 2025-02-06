@@ -2,7 +2,7 @@
 Description=Block libdecor GTK plugin
 
 [Service]
-Type=exec
+Type=notify
 ExecStart=%Y/../../../libexec/libdecor_lsm
 
 [Install]
