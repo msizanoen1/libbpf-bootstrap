@@ -1,6 +1,5 @@
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
-#include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
 
 char LICENSE[] SEC("license") = "GPL";
@@ -15,11 +14,11 @@ int BPF_PROG(libdecor_lsm_mmap_file, struct file *file, unsigned long reqprot, u
 {
 	char name_buf[NAME_MAX + 1];
 
-	if (!(prot & PROT_EXEC))
+	if (!(prot & PROT_EXEC) || !file)
 		return 0;
 
 	if (bpf_probe_read_kernel_str(name_buf, sizeof(name_buf),
-				      BPF_CORE_READ(file, f_path.dentry, d_name.name)) < 0)
+				      file->f_path.dentry->d_name.name) < 0)
 		return 0;
 
 	if (!__builtin_strcmp(name_buf, "libdecor-gtk.so"))
