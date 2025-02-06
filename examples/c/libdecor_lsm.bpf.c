@@ -5,7 +5,7 @@
 
 char LICENSE[] SEC("license") = "GPL";
 
-#define EPERM	  1
+#define EACCES	  13
 #define PROT_EXEC 0x4
 #define NAME_MAX  255
 
@@ -23,7 +23,7 @@ int BPF_PROG(libdecor_lsm_mmap_file, struct file *file, unsigned long reqprot, u
 		return 0;
 
 	if (!__builtin_strcmp(name_buf, "libdecor-gtk.so"))
-		return -EPERM;
+		return -EACCES;
 
 	return 0;
 }
